@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Profile</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+  <nav class="bg-white shadow p-4 flex justify-between items-center">
+    <div>
+      <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+    </div>
+    <div>
+      <% if (user) { %>
+        <a href="/" class="text-gray-700 hover:text-gray-900 ml-4">Home</a>
+        <a href="/blogs/new" class="text-gray-700 hover:text-gray-900 ml-4">Create Blog</a>
+        <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+        <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+      <% } else { %>
+        <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+        <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+      <% } %>
+    </div>
+  </nav>
+  <main class="flex justify-around gap-2 w-full">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <%- include('partials/flash-messages') %>
+      
+      <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div class="px-4 py-5 sm:px-6">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <% if (user.profileImage) { %>
+                <img class="h-24 w-24 rounded-full" src="<%= user.profileImage %>" alt="">
+              <% } else { %>
+                <span class="h-24 w-24 rounded-full bg-primary-100 flex items-center justify-center">
+                  <span class="text-primary-600 font-medium text-3xl">
+                    <%= user.firstName[0] + user.lastName[0] %>
+                  </span>
+                </span>
+              <% } %>
+              <div class="ml-4">
+                <h3 class="text-2xl font-bold leading-6 text-gray-900">
+                  <%= user.firstName %> <%= user.lastName %>
+                </h3>
+                <p class="mt-1 max-w-2xl text-sm text-gray-500">
+                  @<%= user.username %>
+                </p>
+              </div>
+            </div>
+            <% if (isAuthenticated && user._id.toString() === user._id.toString()) { %>
+              <a href="/profile/edit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                Edit Profile
+              </a>
+            <% } %>
+          </div>
+        </div>
+        <div class="border-t border-gray-200">
+          <dl>
+            <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt class="text-sm font-medium text-gray-500">Email</dt>
+              <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                <%= user.email %>
+              </dd>
+            </div>
+            <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt class="text-sm font-medium text-gray-500">Member since</dt>
+              <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                <%= new Date(user.createdAt).toLocaleDateString() %>
+              </dd>
+            </div>
+            <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+              <dt class="text-sm font-medium text-gray-500">Bio</dt>
+              <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                <%= user.bio || 'No bio provided' %>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <!-- User's Blogs -->
+      <div class="mt-10">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">
+          <%= user.firstName %>'s Blogs
+        </h2>
+        <% if (blogs && blogs.length > 0) { %>
+          <div class="grid gap-16 lg:grid-cols-3 lg:gap-x-5 lg:gap-y-12">
+            <% blogs.forEach(blog => { %>
+              <%- include('partials/blog-card', { blog }) %>
+            <% }); %>
+          </div>
+          <%- include('partials/pagination', { currentPage, totalPages, baseUrl: `/profile/${user._id}?` }) %>
+        <% } else { %>
+          <div class="text-center py-12 bg-white rounded-lg shadow">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">No blogs yet</h3>
+            <p class="mt-1 text-sm text-gray-500">
+              <%= isAuthenticated && user._id.toString() === user._id.toString() ? 
+                'Get started by creating your first blog post.' : 
+                'This user hasn\'t published any blogs yet.' %>
+            </p>
+            <% if (isAuthenticated && user._id.toString() === user._id.toString()) { %>
+              <div class="mt-6">
+                <a href="/blogs/new" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                  Create New Blog
+                </a>
+              </div>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </main>
+  <!--  Gsap is needed for Basic Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+  <!-- Scroll Trigger is needed for Scroll Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <!-- Three.js is needed for 3d Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+  
+  <!-- ControlKit is needed for Debug Panel -->
+  <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+  <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+  <script>
+    Shery.mouseFollower();
+    Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+  //Parameters are optional.
+  ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+  duration: 1,
+});
+  </script>
+</body>
+
+</html>

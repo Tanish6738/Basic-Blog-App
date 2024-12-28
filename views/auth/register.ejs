@@ -1,0 +1,209 @@
+<%- include('../layouts/main', { title: 'Register' }) %>
+
+<div class="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <div>
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                Create your account
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+                Already have an account?
+                <a href="/login" class="font-medium text-primary-600 hover:text-primary-500">
+                    Sign in
+                </a>
+            </p>
+        </div>
+        <form class="mt-8 space-y-6" action="/auth/register" method="POST" enctype="multipart/form-data">
+            <!-- Name Fields -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="firstName" class="form-label">First Name</label>
+                    <input type="text" name="firstName" id="firstName" required
+                           class="form-input"
+                           placeholder="John">
+                </div>
+                <div>
+                    <label for="lastName" class="form-label">Last Name</label>
+                    <input type="text" name="lastName" id="lastName" required
+                           class="form-input"
+                           placeholder="Doe">
+                </div>
+            </div>
+
+            <!-- Email -->
+            <div>
+                <label for="email" class="form-label">Email address</label>
+                <input type="email" name="email" id="email" autocomplete="email" required
+                       class="form-input"
+                       placeholder="john@example.com">
+            </div>
+
+            <!-- Username -->
+            <div>
+                <label for="username" class="form-label">Username</label>
+                <div class="mt-1 relative rounded-md shadow-sm">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span class="text-gray-500 sm:text-sm">@</span>
+                    </div>
+                    <input type="text" name="username" id="username" required
+                           class="form-input pl-8"
+                           placeholder="johndoe">
+                </div>
+            </div>
+
+            <!-- Password -->
+            <div>
+                <label for="password" class="form-label">Password</label>
+                <input type="password" name="password" id="password" autocomplete="new-password" required
+                       class="form-input"
+                       placeholder="••••••••">
+                <p class="mt-1 text-sm text-gray-500">Must be at least 8 characters long with 1 number and 1 special character.</p>
+            </div>
+
+            <!-- Confirm Password -->
+            <div>
+                <label for="confirmPassword" class="form-label">Confirm Password</label>
+                <input type="password" name="confirmPassword" id="confirmPassword" required
+                       class="form-input"
+                       placeholder="••••••••">
+            </div>
+
+            <!-- Profile Image -->
+            <div>
+                <label class="form-label">Profile Image</label>
+                <div class="mt-1 flex items-center space-x-4">
+                    <div class="flex-shrink-0">
+                        <img id="profilePreview" class="h-16 w-16 rounded-full object-cover" src="/images/default-avatar.png" alt="Profile preview">
+                    </div>
+                    <div class="flex-grow">
+                        <input type="file" name="profileImage" id="profileImage" accept="image/*"
+                               class="form-input">
+                        <p class="mt-1 text-sm text-gray-500">Optional. Max file size: 5MB.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terms and Conditions -->
+            <div class="flex items-center">
+                <input type="checkbox" name="terms" id="terms" required
+                       class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                <label for="terms" class="ml-2 block text-sm text-gray-900">
+                    I agree to the
+                    <a href="/terms" class="text-primary-600 hover:text-primary-500">Terms and Conditions</a>
+                    and
+                    <a href="/privacy" class="text-primary-600 hover:text-primary-500">Privacy Policy</a>
+                </label>
+            </div>
+
+            <div>
+                <button type="submit" class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                    <span class="absolute left-0 inset-y-0 flex items-center pl-3">
+                        <svg class="h-5 w-5 text-primary-500 group-hover:text-primary-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                        </svg>
+                    </span>
+                    Create Account
+                </button>
+            </div>
+        </form>
+
+        <!-- Social Registration -->
+        <div class="mt-6">
+            <div class="relative">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-gray-300"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                    <span class="px-2 bg-white text-gray-500">
+                        Or register with
+                    </span>
+                </div>
+            </div>
+
+            <div class="mt-6 grid grid-cols-2 gap-3">
+                <div>
+                    <a href="/auth/google" class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                        <span class="sr-only">Register with Google</span>
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12.545,12.151L12.545,12.151c0,1.054,0.855,1.909,1.909,1.909h3.536c-0.367,1.722-1.405,3.074-2.936,3.952c-1.531,0.878-3.362,1.116-5.082,0.672c-1.72-0.444-3.155-1.472-4.033-3.003c-0.878-1.531-1.116-3.362-0.672-5.082s1.472-3.155,3.003-4.033c1.531-0.878,3.362-1.116,5.082-0.672c1.72,0.444,3.155,1.472,4.033,3.003" />
+                            <path d="M19.834,10.147h-0.545v-0.545c0-0.302-0.244-0.545-0.545-0.545h-1.091c-0.302,0-0.545,0.244-0.545,0.545v0.545h-0.545c-0.302,0-0.545,0.244-0.545,0.545v1.091c0,0.302,0.244,0.545,0.545,0.545h0.545v0.545c0,0.302,0.244,0.545,0.545,0.545h1.091c0.302,0,0.545-0.244,0.545-0.545v-0.545h0.545c0.302,0,0.545-0.244,0.545-0.545v-1.091C20.379,10.391,20.135,10.147,19.834,10.147z" />
+                        </svg>
+                    </a>
+                </div>
+
+                <div>
+                    <a href="/auth/github" class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                        <span class="sr-only">Register with GitHub</span>
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z" clip-rule="evenodd" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirmPassword');
+    const usernameInput = document.getElementById('username');
+    const profileInput = document.getElementById('profileImage');
+    const profilePreview = document.getElementById('profilePreview');
+
+    // Profile image preview
+    profileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) { // 5MB
+                alert('File size must be less than 5MB');
+                this.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                profilePreview.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Form validation
+    form.addEventListener('submit', function(e) {
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(emailInput.value)) {
+            e.preventDefault();
+            alert('Please enter a valid email address.');
+            return;
+        }
+
+        // Username validation
+        const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+        if (!usernameRegex.test(usernameInput.value)) {
+            e.preventDefault();
+            alert('Username must be 3-20 characters long and can only contain letters, numbers, and underscores.');
+            return;
+        }
+
+        // Password validation
+        const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
+        if (!passwordRegex.test(passwordInput.value)) {
+            e.preventDefault();
+            alert('Password must be at least 8 characters long and contain at least 1 number and 1 special character.');
+            return;
+        }
+
+        // Confirm password
+        if (passwordInput.value !== confirmPasswordInput.value) {
+            e.preventDefault();
+            alert('Passwords do not match.');
+            return;
+        }
+    });
+});
+</script>

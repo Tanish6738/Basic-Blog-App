@@ -1,0 +1,1364 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const cookieParser = require('cookie-parser');
+const bcrypt = require('bcryptjs');
+const flash = require('connect-flash');
+const multer = require('multer');
+const path = require('path');
+const app = express();
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/myapp', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+
+// Define User Schema
+const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
+  profileImage: { type: String }  // Added profile image field
+});
+
+
+const User = mongoose.model('User', UserSchema);
+
+// Define Blog Schema
+const blogSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true
+  },
+  content: [{
+    text: String,
+    image: String
+  }],
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  category: {
+    type: String,
+    enum: ['Nature', 'Wildlife', 'Household'],
+    required: true
+  },
+  keywords: [String],
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  comments: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Comment'
+  }]
+});
+
+const Blog = mongoose.model('Blog', blogSchema);
+
+// Comment Schema
+const CommentSchema = new mongoose.Schema({
+  text: {
+    type: String,
+    required: true
+  },
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  blog: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Blog',
+    required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const Comment = mongoose.model('Comment', CommentSchema);
+
+// Middleware
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(cookieParser());
+app.use(session({
+  secret: 'secret',
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({ mongoUrl: 'mongodb://localhost:27017/myapp' }),
+  cookie: { maxAge: 180 * 60 * 1000 }
+}));
+app.use(flash());
+app.set('view engine', 'ejs');
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Multer configuration for file uploads
+const storage = multer.diskStorage({
+  destination: function(req, file, cb) {
+    cb(null, 'public/uploads');
+  },
+  filename: function(req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB limit
+  fileFilter: function(req, file, cb) {
+    const filetypes = /jpeg|jpg|png|gif/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb('Error: File upload only supports the following filetypes - ' + filetypes);
+  }
+});
+
+// Middleware to set flash messages and user in locals
+app.use((req, res, next) => {
+  res.locals.success_msg = req.flash('success_msg');
+  res.locals.error_msg = req.flash('error_msg');
+  res.locals.error = req.flash('error');
+  res.locals.user = req.session.user || null;
+  next();
+});
+
+// Helper function to check if the user is an admin
+function isAdmin(user) {
+  return user && user.username === 'Admin';
+}
+
+// Middleware to set isAdmin function in res.locals
+app.use((req, res, next) => {
+  res.locals.isAdmin = isAdmin;
+  next();
+});
+
+// Ensure authenticated middleware
+function ensureAuthenticated(req, res, next) {
+  if (req.session.user) {
+    return next();
+  }
+  req.flash('error_msg', 'Please log in to view this resource.');
+  res.redirect('/login');
+}
+
+// Function to create admin user
+async function createAdminUser() {
+  const adminExists = await User.findOne({ username: 'Admin' });
+  if (!adminExists) {
+    const hashedPassword = await bcrypt.hash('admin123', 10);
+    const adminUser = new User({
+      username: 'Admin',
+      password: hashedPassword,
+      email: 'admin@example.com',
+      firstName: 'Admin',
+      lastName: 'User'
+    });
+    await adminUser.save();
+    console.log('Admin user created.');
+  } else {
+    console.log('Admin user already exists.');
+  }
+}
+
+// Call the function to create admin user on server start
+createAdminUser();
+
+// Routes
+app.get('/', async (req, res) => {
+  const { search, category } = req.query;
+  let query = {};
+
+  if (search) {
+    query = {
+      $or: [
+        { 'author.username': { $regex: search, $options: 'i' } },
+        { title: { $regex: search, $options: 'i' } },
+        { keywords: { $regex: search, $options: 'i' } }
+      ]
+    };
+  }
+
+  if (category) {
+    query.category = category;
+  }
+
+  const blogs = await Blog.find(query).populate('author', 'username').exec();
+  res.render('index', { blogs, search, category });
+});
+
+
+app.get('/register', (req, res) => {
+  res.render('register');
+});
+
+app.post('/register', upload.single('profileImage'), async (req, res) => {
+  const { username, password, email, firstName, lastName } = req.body;
+  const userExists = await User.findOne({ username });
+  const emailExists = await User.findOne({ email });
+
+  if (userExists || emailExists) {
+    req.flash('error_msg', 'Username or email already exists.');
+    return res.redirect('/register');
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = new User({
+    username, 
+    password: hashedPassword, 
+    email, 
+    firstName, 
+    lastName, 
+    profileImage: req.file ? req.file.filename : ''  // Save profile image filename
+  });
+  await user.save();
+  req.session.user = user;
+  req.flash('success_msg', 'Registration successful. You are now logged in.');
+  res.redirect('/');
+});
+
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const user = await User.findOne({ username });
+
+  if (!user) {
+    req.flash('error_msg', 'User not found.');
+    return res.redirect('/login');
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) {
+    req.flash('error_msg', 'Incorrect password.');
+    return res.redirect('/login');
+  }
+
+  req.session.user = user;
+  req.flash('success_msg', 'Login successful.');
+  res.redirect('/');
+});
+
+app.get('/profile', ensureAuthenticated, async (req, res) => {
+  const blogs = await Blog.find({ author: req.session.user._id }).exec();
+  res.render('profile', { user: req.session.user, blogs });
+});
+
+// Route to render the edit profile page
+app.get('/profile/edit', ensureAuthenticated, (req, res) => {
+  res.render('edit_profile', { user: req.session.user });
+});
+
+// Route to handle profile update
+app.post('/profile/edit', ensureAuthenticated, upload.single('profileImage'), async (req, res) => {
+  const {firstName, lastName,email, username, } = req.body;
+  const user = await User.findById(req.session.user._id);
+
+  if (user) {
+    
+    user.firstName = firstName;
+    user.lastName = lastName;
+    if (req.file) {
+      user.profileImage = req.file.filename;
+    }
+    await user.save();
+    req.session.user = user; 
+    req.flash('success_msg', 'Profile updated successfully.');
+  } else {
+    req.flash('error_msg', 'User not found.');
+  }
+  res.redirect('/profile/');
+});
+
+// Route to handle account deletion
+app.post('/profile/delete', ensureAuthenticated, async (req, res) => {
+  const userId = req.session.user._id;
+
+  // Delete all blogs created by the user
+  await Blog.deleteMany({ author: userId });
+
+  // Delete the user
+  await User.findByIdAndDelete(userId);
+  
+  req.session.destroy();
+  res.redirect('/');
+});
+
+app.get('/logout', (req, res) => {
+  req.session.destroy(err => {
+    if (err) {
+      return res.redirect('/profile');
+    }
+    res.clearCookie('connect.sid');
+    req.flash('success_msg', 'You have logged out successfully.');
+    res.redirect('/');
+  });
+});
+
+app.get('/delete', ensureAuthenticated, async (req, res) => {
+  await User.deleteOne({ _id: req.session.user._id });
+  req.session.destroy(err => {
+    if (err) {
+      return res.redirect('/profile');
+    }
+    res.clearCookie('connect.sid');
+    req.flash('success_msg', 'Your account has been deleted successfully.');
+    res.redirect('/');
+  });
+});
+
+app.get('/blogs/new', ensureAuthenticated, (req, res) => {
+  res.render('create_blog', { categories: ['Nature', 'Wildlife', 'Household'] });
+});
+
+app.post('/blogs/new', ensureAuthenticated, upload.array('blogImage[]'), async (req, res) => {
+  try {
+    const { title, blogContent, keywords, category } = req.body;
+    
+    const blogContentArray = Array.isArray(blogContent) ? blogContent : [blogContent];
+    const blogImagesArray = req.files ? req.files.map(file => file.filename) : [];
+
+    const blogContentWithImages = blogContentArray.map((content, index) => ({
+      text: content,
+      image: blogImagesArray[index] || ''
+    }));
+
+    const blog = new Blog({
+      title,
+      content: blogContentWithImages,
+      author: req.session.user._id,
+      category,
+      keywords: keywords.split(',').map(keyword => keyword.trim())
+    });
+
+    await blog.save();
+    req.flash('success_msg', 'Blog created successfully.');
+    res.redirect('/');
+  } catch (error) {
+    console.error(error);
+    req.flash('error_msg', 'Error creating blog.');
+    res.redirect('/blogs/new');
+  }
+});
+
+app.get('/blogs/edit/:id', ensureAuthenticated, async (req, res) => {
+  const blog = await Blog.findById(req.params.id);
+
+  if (!blog) {
+    req.flash('error_msg', 'Blog not found.');
+    return res.redirect('/');
+  }
+
+  if (!blog.author.equals(req.session.user._id) && req.session.user.username !== 'Admin') {
+    req.flash('error_msg', 'Unauthorized access.');
+    return res.redirect('/');
+  }
+
+  res.render('edit_blog', { blog, categories: ['Nature', 'Wildlife', 'Household'] });
+});
+
+app.post('/blogs/edit/:id', ensureAuthenticated, upload.array('blogImage[]'), async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+
+    if (!blog) {
+      req.flash('error_msg', 'Blog not found.');
+      return res.redirect('/');
+    }
+
+    if (!blog.author.equals(req.session.user._id)) {
+      req.flash('error_msg', 'Unauthorized access.');
+      return res.redirect('/');
+    }
+
+    const { title, blogContent, keywords, category } = req.body;
+
+    const blogContentArray = Array.isArray(blogContent) ? blogContent : [blogContent];
+    const blogImagesArray = req.files ? req.files.map(file => file.filename) : [];
+
+    const blogContentWithImages = blogContentArray.map((content, index) => ({
+      text: content,
+      image: blogImagesArray[index] || blog.content[index]?.image || ''
+    }));
+
+    blog.title = title;
+    blog.content = blogContentWithImages;
+    blog.category = category;
+    blog.keywords = keywords.split(',').map(keyword => keyword.trim());
+
+    await blog.save();
+    req.flash('success_msg', 'Blog updated successfully.');
+    res.redirect('/');
+  } catch (error) {
+    console.error(error);
+    req.flash('error_msg', 'Error updating blog.');
+    res.redirect(`/blogs/edit/${req.params.id}`);
+  }
+});
+
+app.post('/blogs/delete/:id', ensureAuthenticated, async (req, res) => {
+  const blog = await Blog.findById(req.params.id);
+
+  if (!blog) {
+    req.flash('error_msg', 'Blog not found.');
+    return res.redirect('/');
+  }
+
+  if (!blog.author.equals(req.session.user._id) && req.session.user.username !== 'Admin') {
+    req.flash('error_msg', 'Unauthorized access.');
+    return res.redirect('/');
+  }
+
+  await blog.deleteOne();
+  req.flash('success_msg', 'Blog deleted successfully.');
+  res.redirect('/');
+});
+
+app.get('/admin', ensureAuthenticated, async (req, res) => {
+  if (!isAdmin(req.session.user)) {
+    req.flash('error_msg', 'Unauthorized access.');
+    return res.redirect('/');
+  }
+
+  const blogs = await Blog.find().populate('author', 'username').exec();
+  const users = await User.find().exec();
+
+  // Calculate userBlogsCount
+  const userBlogsCount = await Blog.aggregate([
+    {
+      $group: {
+        _id: "$author",
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  res.render('admin', { blogs, users, userBlogsCount });
+});
+
+app.post('/admin/blogs/:id/delete', ensureAuthenticated, async (req, res) => {
+  if (!isAdmin(req.session.user)) {
+    req.flash('error_msg', 'Access denied.');
+    return res.redirect('/');
+  }
+
+  await Blog.findByIdAndDelete(req.params.id);
+  req.flash('success_msg', 'Blog deleted successfully.');
+  res.redirect('/admin');
+});
+
+app.post('/admin/users/:id/delete', ensureAuthenticated, async (req, res) => {
+  if (!isAdmin(req.session.user)) {
+    req.flash('error_msg', 'Unauthorized access.');
+    return res.redirect('/');
+  }
+
+  await User.findByIdAndDelete(req.params.id);
+  req.flash('success_msg', 'User deleted successfully.');
+  res.redirect('/admin');
+});
+
+// Route to Add a Comment to a Blog
+app.post('/blogs/:id/comments', ensureAuthenticated, async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) {
+      req.flash('error_msg', 'Blog not found.');
+      return res.redirect('/');
+    }
+
+    const comment = new Comment({
+      text: req.body.text,
+      author: req.session.user._id,
+      blog: blog._id
+    });
+
+    await comment.save();
+    blog.comments.push(comment._id);
+    await blog.save();
+
+    req.flash('success_msg', 'Comment added successfully.');
+    res.redirect(`/blogs/${blog._id}`);
+  } catch (error) {
+    console.error(error);
+    req.flash('error_msg', 'Error adding comment.');
+    res.redirect(`/blogs/${req.params.id}`);
+  }
+});
+
+// Route to Edit a Comment
+app.post('/comments/edit/:id', ensureAuthenticated, async (req, res) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) {
+      req.flash('error_msg', 'Comment not found.');
+      return res.redirect('back');
+    }
+
+    if (!comment.author.equals(req.session.user._id) && req.session.user.username !== 'Admin') {
+      req.flash('error_msg', 'Unauthorized access.');
+      return res.redirect('back');
+    }
+
+    comment.text = req.body.text;
+    await comment.save();
+
+    req.flash('success_msg', 'Comment edited successfully.');
+    res.redirect(`/blogs/${comment.blog}`);
+  } catch (error) {
+    console.error(error);
+    req.flash('error_msg', 'Error editing comment.');
+    res.redirect('back');
+  }
+});
+
+// Route to Delete a Comment
+app.post('/comments/delete/:id', ensureAuthenticated, async (req, res) => {
+  try {
+    const comment = await Comment.findById(req.params.id);
+    if (!comment) {
+      req.flash('error_msg', 'Comment not found.');
+      return res.redirect('back');
+    }
+
+    if (!comment.author.equals(req.session.user._id) && req.session.user.username !== 'Admin') {
+      req.flash('error_msg', 'Unauthorized access.');
+      return res.redirect('back');
+    }
+
+    await Comment.findByIdAndDelete(req.params.id);
+    req.flash('success_msg', 'Comment deleted successfully.');
+    res.redirect(`/blogs/${comment.blog}`);
+  } catch (error) {
+    console.error(error);
+    req.flash('error_msg', 'Error deleting comment.');
+    res.redirect('back');
+  }
+});
+
+// Route to Display Blog with Comments
+app.get('/blogs/:id', async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id).populate('author', 'username').populate({
+      path: 'comments',
+      populate: {
+        path: 'author',
+        select: 'username'
+      }
+    }).exec();
+
+    if (!blog) {
+      req.flash('error_msg', 'Blog not found.');
+      return res.redirect('/');
+    }
+
+    res.render('show_blog', { blog });
+  } catch (error) {
+    console.error(error);
+    req.flash('error_msg', 'Error loading blog.');
+    res.redirect('/');
+  }
+});
+
+
+
+
+
+
+app.listen(3000, () => {
+  console.log('Server started on port 3000');
+});
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+  <style>
+    td{
+      text-align: center;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  <nav class="bg-white shadow p-4 flex justify-between items-center">
+    <div>
+      <a href="/" class="text-xl font-bold text-gray-800">BlogSite</a>
+    </div>
+    <div>
+      <% if (user) { %>
+        
+          <div>
+            <a href="/" class="text-gray-700 hover:text-gray-900 ml-4">Home</a>
+            <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+            <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+          </div>
+          
+
+      <% } else { %>
+        <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+        <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+      <% } %>
+    </div>
+  </nav>
+
+  <div class="flex">
+    <div class="flex-1 p-4">
+      <h2 class="text-2xl font-bold mb-4">All Users</h2>
+      <table class="min-w-full bg-white shadow-md rounded mb-4">
+        <thead>
+          <tr>
+            <th class="py-2 px-4 border-b">Username</th>
+            <th class="py-2 px-4 border-b">Number of Posts</th>
+            <th class="py-2 px-4 border-b">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach(user => { %>
+          <tr>
+            <td class="py-2 px-4 border-b"><%= user.username %></td>
+            <td class="py-2 px-4 border-b">
+              <% 
+                if (userBlogsCount) {
+                  const userCount = userBlogsCount.find(count => count._id.toString() === user._id.toString());
+              %>
+                  <%= userCount ? userCount.count : 0 %>
+              <% } else { %>
+                  No data available
+              <% } %>
+            </td>
+            <td class="py-2 px-4 border-b">
+              <form action="/admin/users/<%= user._id %>/delete" method="POST">
+                <button type="submit" class="bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded">Delete User</button>
+              </form>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+      <h2 class="text-2xl font-bold mb-4">All Blogs</h2>
+      <div class="space-y-4">
+        <% blogs.forEach(blog => { %>
+          <div class="bg-white p-4 shadow-md rounded">
+            <h2 class="text-xl font-bold"><%= blog.title %></h2>
+            <p>by <%= blog.author.username %></p>
+            <form action="/admin/blogs/<%= blog._id %>/delete" method="POST">
+              <button type="submit" class="bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded mt-2">Delete Blog</button>
+            </form>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+
+  </div>
+
+  <!--  Gsap is needed for Basic Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+  <!-- Scroll Trigger is needed for Scroll Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <!-- Three.js is needed for 3d Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+  
+  <!-- ControlKit is needed for Debug Panel -->
+  <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+  <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+  <script>
+    Shery.mouseFollower();
+    Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+  //Parameters are optional.
+  ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+  duration: 1,
+});
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create Blog</title><link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <nav class="bg-white shadow p-4 flex justify-between items-center absolute top-0 w-full">
+    <div>
+      <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+    </div>
+    <div>
+      <% if (user) { %>
+        
+          <div>
+            <a href="/" class="text-gray-700 hover:text-gray-900 ml-4">Home</a>
+            <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+            <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+          </div>
+          
+
+      <% } else { %>
+        <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+        <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+      <% } %>
+    </div>
+  </nav>
+  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-3xl">
+    <h1 class="text-2xl font-bold mb-6">Create Blog</h1>
+    <form action="/blogs/new" method="POST" enctype="multipart/form-data" class="space-y-4">
+      <div>
+        <label for="title" class="block text-gray-700 font-bold">Title:</label>
+        <input type="text" name="title" id="title" class="w-full border rounded px-3 py-2" required>
+      </div>
+
+      <div>
+        <label for="keywords" class="block text-gray-700 font-bold">Keywords:</label>
+        <input type="text" name="keywords" id="keywords" class="w-full border rounded px-3 py-2">
+      </div>
+
+      <div>
+        <label for="contentContainer" class="block text-gray-700 font-bold">Content:</label>
+        <div id="contentContainer" class="space-y-4">
+          <div>
+            <textarea name="blogContent[]" class="w-full border rounded px-3 py-2" required></textarea>
+            <input type="file" name="blogImage[]" class="mt-2">
+          </div>
+        </div>
+        <button type="button" onclick="addContentField()" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded mt-2">Add more content</button>
+      </div>
+      <div>
+        <label for="category">Category</label>
+        <select name="category" id="category" required>
+          <option value="">Select a category</option>
+          <% categories.forEach(function(category) { %>
+            <option value="<%= category %>"><%= category %></option>
+          <% }); %>
+        </select>
+      </div>
+      <button type="submit" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded">Create</button>
+    </form>
+    <a href="/" class="text-blue-500 hover:underline mt-4 block">Back to Home</a>
+  </div>
+  <!--  Gsap is needed for Basic Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+  <!-- Scroll Trigger is needed for Scroll Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <!-- Three.js is needed for 3d Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+  
+  <!-- ControlKit is needed for Debug Panel -->
+  <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+  <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+
+  <script>
+    Shery.mouseFollower();
+    Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+  //Parameters are optional.
+  ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+  duration: 1,
+});
+    function addContentField() {
+      const container = document.getElementById('contentContainer');
+      const div = document.createElement('div');
+      div.innerHTML = `
+        <textarea name="blogContent[]" class="w-full border rounded px-3 py-2" required></textarea>
+        <input type="file" name="blogImage[]" class="mt-2">
+      `;
+      container.appendChild(div);
+    }
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Edit Blog</title><link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+</head>
+<body class="bg-gray-100 min-h-screen flex justify-between items-center">
+  <nav class="bg-white shadow p-4 flex justify-between items-center absolute top-0 w-full">
+    <div>
+      <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+    </div>
+    <div>
+      <% if (user) { %>
+        <div>
+          <a href="/" class="text-gray-700 hover:text-gray-900 ml-4">Home</a>
+          <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+          <a href="/blogs/new" class="text-gray-700 hover:text-gray-900 ml-4">Create Blog</a>
+        </div>
+      <% } else { %>
+        <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+        <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+      <% } %>
+    </div>
+  </nav>
+  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-3xl mx-auto mt-8">
+    <h1 class="text-2xl font-bold mb-6">Edit Blog</h1>
+    <form action="/blogs/edit/<%= blog._id %>" method="POST" enctype="multipart/form-data" class="space-y-4">
+      <div>
+        <label for="title" class="block text-gray-700 font-bold">Title:</label>
+        <input type="text" name="title" id="title" value="<%= blog.title %>" class="w-full border rounded px-3 py-2" required>
+      </div>
+      <div>
+        <label for="category" class="block text-gray-700 font-bold">Category:</label>
+        <select name="category" id="category" class="w-full border rounded px-3 py-2" required>
+          <% ['Nature', 'Wildlife', 'Household'].forEach(category => { %>
+            <option value="<%= category %>" <%= blog.category === category ? 'selected' : '' %>><%= category %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div>
+        <label for="keywords" class="block text-gray-700 font-bold">Keywords:</label>
+        <input type="text" name="keywords" id="keywords" value="<%= blog.keywords.join(', ') %>" class="w-full border rounded px-3 py-2">
+      </div>
+      <div>
+        <label for="contentContainer" class="block text-gray-700 font-bold">Content:</label>
+        <div id="contentContainer" class="space-y-4">
+          <% blog.content.forEach((item, index) => { %>
+            <div>
+              <textarea name="blogContent[]" class="w-full border rounded px-3 py-2" required><%= item.text %></textarea>
+              <input type="file" name="blogImage[]" class="mt-2">
+              <% if (item.image) { %>
+                <img src="/uploads/<%= item.image %>" alt="Blog Image" class="mt-2 max-w-xs">
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+        <button type="button" onclick="addContentField()" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded mt-2">Add more content</button>
+      </div>
+      <button type="submit" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded">Update</button>
+    </form>
+    <a href="/" class="text-blue-500 hover:underline mt-4 block">Back to Home</a>
+  </div>
+    <!--  Gsap is needed for Basic Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+    <!-- Scroll Trigger is needed for Scroll Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    
+    <!-- Three.js is needed for 3d Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+    
+    <!-- ControlKit is needed for Debug Panel -->
+    <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+    <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+    <script>
+      Shery.mouseFollower();
+      Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+    //Parameters are optional.
+    ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+    duration: 1,
+  });
+
+    function addContentField() {
+      const container = document.getElementById('contentContainer');
+      const div = document.createElement('div');
+      div.innerHTML = `
+        <textarea name="blogContent[]" class="w-full border rounded px-3 py-2" required></textarea>
+        <input type="file" name="blogImage[]" class="mt-2">
+      `;
+      container.appendChild(div);
+    }
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Edit Profile</title><link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+  <nav class="bg-white shadow p-4 flex justify-between items-center">
+    <div>
+      <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+    </div>
+    <div>
+      <% if (user) { %>
+        <a href="/" class="text-gray-700 hover:text-gray-900 ml-4">Home</a>
+        <a href="/blogs/new" class="text-gray-700 hover:text-gray-900 ml-4">Create Blog</a>
+        <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+        <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+      <% } else { %>
+        <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+        <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+      <% } %>
+    </div>
+  </nav>
+  <main class="flex justify-center items-center w-full min-h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-3xl mx-auto">
+      <h2 class="text-xl font-bold mb-4">Edit Profile</h2>
+      <form action="/profile/edit" method="POST" enctype="multipart/form-data">
+        <div class="mb-4">
+          <label for="username" class="block text-gray-700">Username</label>
+          <input type="text" id="username" name="username" value="<%= user.username %>" class="mt-1 p-2 border rounded w-full" readonly>
+        </div>
+        <div class="mb-4">
+          <label for="email" class="block text-gray-700">Email</label>
+          <input type="email" id="email" name="email" value="<%= user.email %>" class="mt-1 p-2 border rounded w-full" readonly>
+        </div>
+        <div class="mb-4">
+          <label for="firstName" class="block text-gray-700">First Name</label>
+          <input type="text" id="firstName" name="firstName" value="<%= user.firstName %>" class="mt-1 p-2 border rounded w-full">
+        </div>
+        <div class="mb-4">
+          <label for="lastName" class="block text-gray-700">Last Name</label>
+          <input type="text" id="lastName" name="lastName" value="<%= user.lastName %>" class="mt-1 p-2 border rounded w-full">
+        </div>
+        <div class="mb-4">
+          <label for="profileImage" class="block text-gray-700">Profile Image</label>
+          <input type="file" id="profileImage" name="profileImage" class="mt-1 p-2 border rounded w-full">
+        </div>
+        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Save Changes</button>
+      </form>
+    </div>
+  </main>
+    <!--  Gsap is needed for Basic Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+    <!-- Scroll Trigger is needed for Scroll Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    
+    <!-- Three.js is needed for 3d Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+    
+    <!-- ControlKit is needed for Debug Panel -->
+    <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+    <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+    <script>
+      Shery.mouseFollower();
+      Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+    //Parameters are optional.
+    ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+    duration: 1,
+  });
+    </script>
+</body>
+
+</html>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Blogs</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+  <link rel="icon" href="/path/to/favicon.ico" type="image/x-icon">
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  <% if (success_msg.length > 0) { %>
+    <p class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert"><%= success_msg %></p>
+  <% } %>
+  <% if (error_msg.length > 0) { %>
+    <p class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert"><%= error_msg %></p>
+  <% } %>
+
+  <nav class="bg-white shadow p-4 flex justify-between items-center">
+    <div>
+      <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+    </div>
+    <div>
+      <% if (user) { %>
+        <div class="flex gap-4 items-center">
+          <% if (user && isAdmin(user)) { %>    
+            <a href="/admin" class="py-2 px-4 rounded">Admin Dashboard</a>
+          <% } %>
+          <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+          <a href="/blogs/new" class="text-gray-700 hover:text-gray-900 ml-4">Create Blog</a>
+          <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+          <div class="flex gap-2 items-center ml-4">
+            <form action="/" method="GET" class="flex items-center">
+              <input type="text" name="search" placeholder="Search by author or keywords" class="border-2 rounded outline-none px-4 py-2" value="<%= search %>">
+              <button class="bg-green-400 px-4 py-2 rounded text-white border-2 border-green-400 hover:text-green-400 hover:bg-white" type="submit">Search</button>
+            </form>
+            <form action="/" method="GET" class="ml-4">
+              <select name="category" onchange="this.form.submit()" class="border-2 outline-none px-4 py-2 rounded">
+                <option value="">All Categories</option>
+                <% ['Nature', 'Wildlife', 'Household'].forEach(cat => { %>
+                  <option value="<%= cat %>" <%= category === cat ? 'selected' : '' %>><%= cat %></option>
+                <% }) %>
+              </select>
+            </form>
+          </div>
+        </div>
+      <% } else { %>
+        <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+        <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+      <% } %>
+    </div>
+  </nav>
+
+  <div class="container mx-auto px-4 py-8 w-2/3">
+    <h1 class="text-3xl font-bold mb-6">All Blogs</h1>
+
+    <div class="space-y-6">
+      <% if (blogs.length > 0) { %>
+        <% blogs.forEach(blog => { %>
+          <div class="bg-white rounded-lg shadow-md overflow-hidden">
+            <div class="flex">
+              <div class="w-1/3 h-48">
+                <% if (blog.content.length > 0 && blog.content[0].image) { %>
+                  <img src="/uploads/<%= blog.content[0].image %>" alt="<%= blog.title %>" class="w-full h-full object-cover">
+                <% } else { %>
+                  <img src="/path/to/default-image.jpg" alt="<%= blog.title %>" class="w-full h-full object-cover">
+                <% } %>
+              </div>
+              <div class="w-2/3 p-4">
+                <h2 class="text-2xl font-bold mb-2">
+                  <a href="/blogs/<%= blog._id %>" class="text-gray-500 hover:underline"><%= blog.title %></a>
+                </h2>
+                <% if (blog.content.length > 0) { %>
+                  <% const preview = blog.content[0].text.split(' ').slice(0, 30).join(' '); %>
+                  <p><%= preview %>...</p>
+                <% } %>
+                <p class="text-gray-700 mb-4">
+                  by 
+                  <% if (user && blog.author && user._id.toString() === blog.author._id.toString()) { %> 
+                    you 
+                  <% } else if (blog.author) { %> 
+                    <%= blog.author.username %> 
+                  <% } %>
+                </p>
+                <p class="text-gray-500 mb-2">Category: <%= blog.category %></p>
+                <div class="flex justify-between items-center">
+                  <a href="/blogs/<%= blog._id %>" class="text-blue-500 hover:underline">Read More</a>
+                  <% if (user && isAdmin(user)) { %>
+                    <form action="/admin/blogs/<%= blog._id %>/delete" method="POST" class="inline-block">
+                      <button type="submit" class="bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded">Delete Blog</button>
+                    </form>
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      <% } else { %>
+        <p class="text-gray-700">No blogs found.</p>
+      <% } %>
+    </div>
+
+    <div class="mt-8">
+      <% if (user) { %>
+        <a href="/blogs/new" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded">Create a new blog</a>
+      <% } else { %>
+        <a href="/login" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">Login to create a new blog</a>
+      <% } %>
+    </div>
+
+  </div>
+  <!--  Gsap is needed for Basic Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+  <!-- Scroll Trigger is needed for Scroll Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <!-- Three.js is needed for 3d Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+  
+  <!-- ControlKit is needed for Debug Panel -->
+  <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+  <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+  <script>
+    Shery.mouseFollower();
+    Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+  //Parameters are optional.
+  ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+  duration: 1,
+});
+  </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title><link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+</head>
+<body class="bg-green-100 min-h-screen flex items-center justify-center">
+    <nav class="bg-white shadow p-4 flex justify-between items-center absolute top-0 w-full">
+        <div>
+          <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+        </div>
+        <div>
+          
+            <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+            <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+
+        </div>
+      </nav>
+    <% if (error_msg.length > 0) { %>
+        <p class="text-red-500 bg-red-200 rounded px-3 py-2 absolute top-10 "><%= error_msg %></p>
+    <% } %>
+
+    <div class="flex w-full max-w-4xl shadow-lg rounded-lg overflow-hidden bg-white">
+        <div class="flex-1 bg-cover bg-center flex flex-col justify-center items-center py-12" style="background-image: url('https://plus.unsplash.com/premium_photo-1714675222078-f7a808907c38?q=80&w=1887&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');">
+            <h2 class="text-white text-4xl font-bold">Welcome Back!</h2>
+            <p class="text-gray-300 mt-4">Login to continue your blogging journey!</p>
+        </div>
+        <div class="flex-1 py-12 px-8">
+            <h2 class="text-2xl font-bold mb-6">Login</h2>
+            <form action="/login" method="POST">
+                <div class="mb-4">
+                    <label for="username" class="block text-gray-700 font-bold mb-2">Username</label>
+                    <input type="text" id="username" name="username" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent" required>
+                </div>
+                <div class="mb-4 relative">
+                    <label for="password" class="block text-gray-700 font-bold mb-2">Password</label>
+                    <input type="password" id="password" name="password" class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent" required>
+                    <input type="checkbox" id="show-password" class="mt-2"> Show Password
+                </div>
+                <button type="submit" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">Login</button>
+            </form>
+            <p class="mt-4">Don't have an account? <a href="/register" class="text-green-500 hover:underline">Register</a></p>
+        </div>
+    </div>
+  <!--  Gsap is needed for Basic Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+  <!-- Scroll Trigger is needed for Scroll Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <!-- Three.js is needed for 3d Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+  
+  <!-- ControlKit is needed for Debug Panel -->
+  <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+  <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+  <script>
+    Shery.mouseFollower();
+    Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+  //Parameters are optional.
+  ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+  duration: 1,
+});
+
+        document.getElementById('show-password').addEventListener('change', function() {
+            var passwordField = document.getElementById('password');
+            passwordField.type = this.checked ? 'text' : 'password';
+        });
+    </script>
+</body>
+</html>
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Profile</title><link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+  <nav class="bg-white shadow p-4 flex justify-between items-center">
+    <div>
+      <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+    </div>
+    <div>
+      <% if (user) { %>
+        <a href="/" class="text-gray-700 hover:text-gray-900 ml-4">Home</a>
+        <a href="/blogs/new" class="text-gray-700 hover:text-gray-900 ml-4">Create Blog</a>
+        <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+        <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+      <% } else { %>
+        <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+        <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+      <% } %>
+    </div>
+  </nav>
+  <main class="flex justify-around gap-2 w-full">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-3xl mx-auto mt-6">
+      <div class="rounded-full w-40 h-40 overflow-hidden bg-gray-100">
+        <img src="/uploads/<%= user.profileImage %>" alt="Profile Image" width="100">
+      </div>
+      <p class="text-lg"><strong>Username:</strong> <%= user.username %></p>
+      <p class="text-lg"><strong>First Name :</strong> <%= user.firstName %></p>
+      <p class="text-lg"><strong>Last Name :</strong> <%= user.lastName %></p>
+      <p class="text-lg"><strong>Email:</strong> <%= user.email %></p>
+
+      <a href="/profile/edit/<% user._id %>" class="bg-blue-500 text-white px-4 py-2 rounded mt-4 inline-block">Edit Profile</a>
+      <form action="/profile/delete" method="POST" class="inline-block mt-4">
+        <button type="submit" class="bg-red-500 text-white px-4 py-2 rounded">Delete Account</button>
+      </form>
+
+      <h2 class="text-xl font-bold mt-6 mb-4">Your Blogs</h2>
+      <div class="space-y-4">
+        <% blogs.forEach(blog => { %>
+          <div class="bg-gray-100 p-4 rounded-lg shadow-md">
+            <h3 class="text-lg font-bold"><%= blog.title %></h3>
+            <a href="/blogs/<%= blog._id %>" class="text-blue-500 hover:underline">Read More</a>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+  </main>
+    <!--  Gsap is needed for Basic Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+    <!-- Scroll Trigger is needed for Scroll Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+    
+    <!-- Three.js is needed for 3d Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+    
+    <!-- ControlKit is needed for Debug Panel -->
+    <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+    <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+    <script>
+      Shery.mouseFollower();
+      Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+    //Parameters are optional.
+    ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+    duration: 1,
+  });
+    </script>
+</body>
+
+</html>
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Register</title><link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+</head>
+
+<body class="bg-green-100 flex flex-col justify-center min-h-screen">
+    <nav class="bg-white shadow p-4 flex justify-between items-center">
+        <div>
+          <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+        </div>
+        <div>
+          <% if (user) { %>
+            <div class="flex gap-4 items-center">
+              <div>
+                <% if (user && isAdmin(user)) { %>    
+                    <a href="/admin" class="py-2 px-4 rounded">Admin Dashboard</a>
+                <% } %>
+                <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+                <a href="/blogs/new" class="text-gray-700 hover:text-gray-900 ml-4">Create Blog</a>
+                <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+              </div>
+              <div class="flex gap-2 items-center"> 
+                <div>
+                  <form action="/" method="GET">
+                    <input type="text" name="search" placeholder="Search by author or keywords" class="border-2 rounded outline-none px-4 py-2" value="<%= search %>">
+                    <button class="bg-green-400 px-4 py-2 rounded text-white " type="submit">Search</button>
+                  </form>
+                </div>
+                <div>
+                  <form action="/" method="GET">
+                    <select name="category" onchange="this.form.submit()" class="border-2 outline-none px-4 py-2 rounded">
+                      <option value="">All Categories</option>
+                      <% ['Nature', 'Wildlife', 'Household'].forEach(cat => { %>
+                        <option value="<%= cat %>" <%= category === cat ? 'selected' : '' %>><%= cat %></option>
+                      <% }) %>
+                    </select>
+                  </form>
+                </div>
+              </div>
+            </div>
+          <% } else { %>
+            <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+            <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+          <% } %>
+        </div>
+      </nav>
+    <% if (error_msg.length > 0) { %>
+        <p class="text-red-500 bg-red-200 rounded px-3 text-center py-2 absolute top-10 "><%= error_msg %></p>
+    <% } %>
+
+            <main class="w-2/3 mx-auto mt-4">
+                <div class="flex w-full max-w-4xl shadow-lg rounded-lg overflow-hidden bg-white">
+                    <div class="flex-1 bg-cover bg-center flex flex-col justify-center items-center py-12"
+                        style="background-image: url('https://plus.unsplash.com/premium_photo-1714675222078-f7a808907c38?q=80&w=1887&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');">
+                        <h2 class="text-white text-4xl font-bold text-center ">Welcome to Blog Website</h2>
+                        <p class="text-gray-300 mt-4">Join us and start your blogging journey today!</p>
+                    </div>
+                    <div class="flex-1 py-12 px-8">
+                        <h2 class="text-2xl font-bold mb-6">Register</h2>
+                        <form action="/register" method="POST">
+                            <div class="mb-4">
+                                <label for="username" class="block text-gray-700 font-bold mb-2">Username</label>
+                                <input type="text" id="username" name="username"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="password" class="block text-gray-700 font-bold mb-2">Password</label>
+                                <input type="password" id="password" name="password"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="email" class="block text-gray-700 font-bold mb-2">Email</label>
+                                <input type="email" id="email" name="email"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="firstName" class="block text-gray-700 font-bold mb-2">First Name</label>
+                                <input type="text" id="firstName" name="firstName"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="lastName" class="block text-gray-700 font-bold mb-2">Last Name</label>
+                                <input type="text" id="lastName" name="lastName"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="profileImage">Profile Image:</label>
+                                <input type="file" name="profileImage" id="profileImage" accept="image/*">
+                            </div>
+    
+    
+    
+                            <button type="submit"
+                                class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">Register</button>
+                        </form>
+                        <p class="mt-4">Already have an account? <a href="/login"
+                                class="text-green-500 hover:underline">Login</a></p>
+                    </div>
+                </div>
+            </main>
+              <!--  Gsap is needed for Basic Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+  <!-- Scroll Trigger is needed for Scroll Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <!-- Three.js is needed for 3d Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+  
+  <!-- ControlKit is needed for Debug Panel -->
+  <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+  <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+  <script>
+    Shery.mouseFollower();
+    Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+  //Parameters are optional.
+  ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+  duration: 1,
+});
+  </script>
+</body>
+
+</html>

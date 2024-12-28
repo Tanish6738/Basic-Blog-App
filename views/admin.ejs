@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+  <style>
+    td{
+      text-align: center;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  <nav class="bg-white shadow p-4 flex justify-between items-center">
+    <div>
+      <a href="/" class="text-xl font-bold text-gray-800">BlogSite</a>
+    </div>
+    <div>
+      <% if (user) { %>
+        
+          <div>
+            <a href="/" class="text-gray-700 hover:text-gray-900 ml-4">Home</a>
+            <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+            <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+          </div>
+          
+
+      <% } else { %>
+        <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+        <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+      <% } %>
+    </div>
+  </nav>
+
+  <div class="flex">
+    <div class="flex-1 p-4">
+      <h2 class="text-2xl font-bold mb-4">All Users</h2>
+      <table class="min-w-full bg-white shadow-md rounded mb-4">
+        <thead>
+          <tr>
+            <th class="py-2 px-4 border-b">Username</th>
+            <th class="py-2 px-4 border-b">Number of Posts</th>
+            <th class="py-2 px-4 border-b">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% users.forEach(user => { %>
+          <tr>
+            <td class="py-2 px-4 border-b"><%= user.username %></td>
+            <td class="py-2 px-4 border-b">
+              <% 
+                if (userBlogsCount) {
+                  const userCount = userBlogsCount.find(count => count._id.toString() === user._id.toString());
+              %>
+                  <%= userCount ? userCount.count : 0 %>
+              <% } else { %>
+                  No data available
+              <% } %>
+            </td>
+            <td class="py-2 px-4 border-b">
+              <form action="/admin/users/<%= user._id %>/delete" method="POST">
+                <button type="submit" class="bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded">Delete User</button>
+              </form>
+            </td>
+          </tr>
+          <% }) %>
+        </tbody>
+      </table>
+
+      <h2 class="text-2xl font-bold mb-4">All Blogs</h2>
+      <div class="space-y-4">
+        <% blogs.forEach(blog => { %>
+          <div class="bg-white p-4 shadow-md rounded">
+            <h2 class="text-xl font-bold"><%= blog.title %></h2>
+            <p>by <%= blog.author.username %></p>
+            <form action="/admin/blogs/<%= blog._id %>/delete" method="POST">
+              <button type="submit" class="bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded mt-2">Delete Blog</button>
+            </form>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+
+  </div>
+
+  <!--  Gsap is needed for Basic Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+  <!-- Scroll Trigger is needed for Scroll Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <!-- Three.js is needed for 3d Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+  
+  <!-- ControlKit is needed for Debug Panel -->
+  <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+  <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+  <script>
+    Shery.mouseFollower();
+    Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+  //Parameters are optional.
+  ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+  duration: 1,
+});
+  </script>
+</body>
+</html>

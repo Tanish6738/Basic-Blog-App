@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Register</title><link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/sheryjs/dist/Shery.css" />
+</head>
+
+<body class="bg-green-100 flex flex-col justify-center min-h-screen">
+    <nav class="bg-white shadow p-4 flex justify-between items-center">
+        <div>
+          <a href="/" class="text-xl font-bold text-gray-800 magnet-target">BlogSite</a>
+        </div>
+        <div>
+          <% if (user) { %>
+            <div class="flex gap-4 items-center">
+              <div>
+                <% if (user && isAdmin(user)) { %>    
+                    <a href="/admin" class="py-2 px-4 rounded">Admin Dashboard</a>
+                <% } %>
+                <a href="/profile" class="text-gray-700 hover:text-gray-900 ml-4">Profile</a>
+                <a href="/blogs/new" class="text-gray-700 hover:text-gray-900 ml-4">Create Blog</a>
+                <a href="/logout" class="text-gray-700 hover:text-gray-900 ml-4">Logout</a>
+              </div>
+              <div class="flex gap-2 items-center"> 
+                <div>
+                  <form action="/" method="GET">
+                    <input type="text" name="search" placeholder="Search by author or keywords" class="border-2 rounded outline-none px-4 py-2" value="<%= search %>">
+                    <button class="bg-green-400 px-4 py-2 rounded text-white " type="submit">Search</button>
+                  </form>
+                </div>
+                <div>
+                  <form action="/" method="GET">
+                    <select name="category" onchange="this.form.submit()" class="border-2 outline-none px-4 py-2 rounded">
+                      <option value="">All Categories</option>
+                      <% ['Nature', 'Wildlife', 'Household'].forEach(cat => { %>
+                        <option value="<%= cat %>" <%= category === cat ? 'selected' : '' %>><%= cat %></option>
+                      <% }) %>
+                    </select>
+                  </form>
+                </div>
+              </div>
+            </div>
+          <% } else { %>
+            <a href="/login" class="text-gray-700 hover:text-gray-900 ml-4">Login</a>
+            <a href="/register" class="text-gray-700 hover:text-gray-900 ml-4">Register</a>
+          <% } %>
+        </div>
+      </nav>
+    <% if (error_msg.length > 0) { %>
+        <p class="text-red-500 bg-red-200 rounded px-3 text-center py-2 absolute top-10 "><%= error_msg %></p>
+    <% } %>
+
+            <main class="w-2/3 mx-auto mt-4">
+                <div class="flex w-full max-w-4xl shadow-lg rounded-lg overflow-hidden bg-white">
+                    <div class="flex-1 bg-cover bg-center flex flex-col justify-center items-center py-12"
+                        style="background-image: url('https://plus.unsplash.com/premium_photo-1714675222078-f7a808907c38?q=80&w=1887&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');">
+                        <h2 class="text-white text-4xl font-bold text-center ">Welcome to Blog Website</h2>
+                        <p class="text-gray-300 mt-4">Join us and start your blogging journey today!</p>
+                    </div>
+                    <div class="flex-1 py-12 px-8">
+                        <h2 class="text-2xl font-bold mb-6">Register</h2>
+                        <form action="/register" method="POST">
+                            <div class="mb-4">
+                                <label for="username" class="block text-gray-700 font-bold mb-2">Username</label>
+                                <input type="text" id="username" name="username"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="password" class="block text-gray-700 font-bold mb-2">Password</label>
+                                <input type="password" id="password" name="password"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="email" class="block text-gray-700 font-bold mb-2">Email</label>
+                                <input type="email" id="email" name="email"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="firstName" class="block text-gray-700 font-bold mb-2">First Name</label>
+                                <input type="text" id="firstName" name="firstName"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="lastName" class="block text-gray-700 font-bold mb-2">Last Name</label>
+                                <input type="text" id="lastName" name="lastName"
+                                    class="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                    required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="profileImage">Profile Image:</label>
+                                <input type="file" name="profileImage" id="profileImage" accept="image/*">
+                            </div>
+    
+    
+    
+                            <button type="submit"
+                                class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">Register</button>
+                        </form>
+                        <p class="mt-4">Already have an account? <a href="/login"
+                                class="text-green-500 hover:underline">Login</a></p>
+                    </div>
+                </div>
+            </main>
+              <!--  Gsap is needed for Basic Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  
+  <!-- Scroll Trigger is needed for Scroll Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  
+  <!-- Three.js is needed for 3d Effects -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.155.0/three.min.js"></script>
+  
+  <!-- ControlKit is needed for Debug Panel -->
+  <script src="https://cdn.jsdelivr.net/gh/automat/controlkit.js@master/bin/controlKit.min.js"></script>
+  <script  type="text/javascript"  src="https://unpkg.com/sheryjs/dist/Shery.js"></script>
+  <script>
+    Shery.mouseFollower();
+    Shery.makeMagnet(".magnet-target" /* Element to target.*/, {
+  //Parameters are optional.
+  ease: "cubic-bezier(0.23, 1, 0.320, 1)",
+  duration: 1,
+});
+  </script>
+</body>
+
+</html>

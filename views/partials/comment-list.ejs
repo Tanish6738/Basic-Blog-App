@@ -1,0 +1,77 @@
+<div class="mt-8 space-y-8">
+    <% if (blog.comments && blog.comments.length > 0) { %>
+        <% blog.comments.forEach(comment => { %>
+            <div class="flex space-x-4">
+                <div class="flex-shrink-0">
+                    <% if (comment.author.profileImage) { %>
+                        <img class="h-10 w-10 rounded-full" src="<%= comment.author.profileImage %>" alt="">
+                    <% } else { %>
+                        <span class="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                            <span class="text-primary-600 font-medium text-sm">
+                                <%= comment.author.firstName[0] + comment.author.lastName[0] %>
+                            </span>
+                        </span>
+                    <% } %>
+                </div>
+                <div class="flex-grow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <a href="/profile/<%= comment.author._id %>" class="font-medium text-gray-900 hover:underline">
+                                <%= comment.author.firstName %> <%= comment.author.lastName %>
+                            </a>
+                            <span class="text-sm text-gray-500 ml-2">
+                                <time datetime="<%= comment.createdAt %>">
+                                    <%= new Date(comment.createdAt).toLocaleDateString() %>
+                                </time>
+                            </span>
+                        </div>
+                        <% if (isAuthenticated && (user._id.toString() === comment.author._id.toString() || user.isAdmin)) { %>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="editComment('<%= comment._id %>')" class="text-sm text-gray-500 hover:text-primary-600">
+                                    Edit
+                                </button>
+                                <form action="/api/comments/<%= comment._id %>?_method=DELETE" method="POST" class="inline">
+                                    <input type="hidden" name="blogId" value="<%= blog._id %>">
+                                    <button type="submit" class="text-sm text-red-500 hover:text-red-600" onclick="return confirm('Are you sure you want to delete this comment?')">
+                                        Delete
+                                    </button>
+                                </form>
+                            </div>
+                        <% } %>
+                    </div>
+                    <div class="mt-2 text-sm text-gray-700" id="comment-content-<%= comment._id %>">
+                        <%= comment.content %>
+                    </div>
+                    <div class="hidden mt-2" id="comment-edit-<%= comment._id %>">
+                        <form action="/api/comments/<%= comment._id %>?_method=PUT" method="POST">
+                            <input type="hidden" name="blogId" value="<%= blog._id %>">
+                            <textarea name="content" rows="3" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"><%= comment.content %></textarea>
+                            <div class="mt-2 flex justify-end space-x-2">
+                                <button type="button" onclick="cancelEdit('<%= comment._id %>')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                    Cancel
+                                </button>
+                                <button type="submit" class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                    Update
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        <% }); %>
+    <% } else { %>
+        <p class="text-gray-500 text-center">No comments yet. Be the first to comment!</p>
+    <% } %>
+</div>
+
+<script>
+function editComment(commentId) {
+    document.getElementById(`comment-content-${commentId}`).classList.add('hidden');
+    document.getElementById(`comment-edit-${commentId}`).classList.remove('hidden');
+}
+
+function cancelEdit(commentId) {
+    document.getElementById(`comment-content-${commentId}`).classList.remove('hidden');
+    document.getElementById(`comment-edit-${commentId}`).classList.add('hidden');
+}
+</script>

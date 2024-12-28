@@ -1,0 +1,186 @@
+<div class="relative bg-white">
+    <!-- Hero Section -->
+    <div class="relative overflow-hidden">
+        <div class="max-w-7xl mx-auto">
+            <div class="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">
+                <main class="mt-10 mx-auto max-w-7xl px-4 sm:mt-12 sm:px-6 md:mt-16 lg:mt-20 lg:px-8 xl:mt-28">
+                    <div class="text-center lg:text-left">
+                        <h1 class="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
+                            <span class="block">Welcome to</span>
+                            <span class="block text-blue-600">Our Blog Platform</span>
+                        </h1>
+                        <p class="mt-3 text-base text-gray-500 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl lg:mx-0">
+                            Share your thoughts, connect with readers, and explore a world of ideas.
+                        </p>
+                        <div class="mt-5 sm:mt-8 sm:flex sm:justify-center lg:justify-start">
+                            <% if (isAuthenticated) { %>
+                                <div class="rounded-md shadow">
+                                    <a href="/blogs/new" class="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 md:py-4 md:px-10 md:text-lg">
+                                        Create New Post
+                                    </a>
+                                </div>
+                            <% } else { %>
+                                <div class="rounded-md shadow">
+                                    <a href="/register" class="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 md:py-4 md:px-10 md:text-lg">
+                                        Get Started
+                                    </a>
+                                </div>
+                            <% } %>
+                            <div class="mt-3 sm:mt-0 sm:ml-3">
+                                <a href="/blogs" class="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 md:py-4 md:px-10 md:text-lg">
+                                    View All Posts
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+        <div class="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
+            <img class="h-56 w-full object-cover sm:h-72 md:h-96 lg:h-full lg:w-full" src="https://images.unsplash.com/photo-1519681393784-d120267933ba" alt="Hero">
+        </div>
+    </div>
+
+    <!-- Featured Posts Section -->
+    <div class="bg-gray-50 py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <h2 class="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">Featured Posts</h2>
+                <p class="mt-4 max-w-2xl mx-auto text-xl text-gray-500">
+                    Discover amazing stories from our community
+                </p>
+            </div>
+
+            <div class="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+                <% if (typeof posts !== 'undefined' && posts.length > 0) { %>
+                    <% posts.forEach(post => { %>
+                        <article class="flex flex-col rounded-lg shadow-lg overflow-hidden transform transition duration-500 hover:scale-105">
+                            <div class="flex-shrink-0">
+                                <img class="h-48 w-full object-cover" src="<%= post.coverImage || 'https://images.unsplash.com/photo-1496128858413-b36217c2ce36' %>" alt="">
+                            </div>
+                            <div class="flex-1 bg-white p-6 flex flex-col justify-between">
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-blue-600">
+                                        <%= post.category %>
+                                    </p>
+                                    <a href="/blogs/<%= post._id %>" class="block mt-2">
+                                        <p class="text-xl font-semibold text-gray-900"><%= post.title %></p>
+                                        <p class="mt-3 text-base text-gray-500"><%= post.excerpt || post.content.substring(0, 150) + '...' %></p>
+                                    </a>
+                                </div>
+                                <div class="mt-6 flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <img class="h-10 w-10 rounded-full" src="<%= post.author.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e' %>" alt="">
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm font-medium text-gray-900"><%= post.author.name %></p>
+                                        <div class="flex space-x-1 text-sm text-gray-500">
+                                            <time datetime="<%= post.createdAt %>"><%= new Date(post.createdAt).toLocaleDateString() %></time>
+                                            <span aria-hidden="true">&middot;</span>
+                                            <span><%= post.readingTime || '5 min' %> read</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    <% }); %>
+                <% } else { %>
+                    <div class="col-span-3 text-center">
+                        <p class="text-gray-500 text-lg">No posts available yet.</p>
+                        <% if (isAuthenticated) { %>
+                            <a href="/blogs/new" class="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                Create First Post
+                            </a>
+                        <% } %>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+
+    <!-- Categories Section -->
+    <div class="bg-white py-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <h2 class="text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">Explore Categories</h2>
+                <p class="mt-4 max-w-2xl mx-auto text-xl text-gray-500">
+                    Find content that interests you
+                </p>
+            </div>
+
+            <div class="mt-10 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+                <% ['Technology', 'Travel', 'Food', 'Lifestyle', 'Business', 'Health', 'Art', 'Science'].forEach(category => { %>
+                    <div class="group relative rounded-lg p-6 bg-white ring-1 ring-gray-200 hover:ring-blue-500 hover:bg-blue-50 transition-all duration-300">
+                        <div class="flex items-center space-x-3">
+                            <span class="h-10 w-10 rounded-lg bg-blue-500 group-hover:bg-blue-600 transition-colors duration-300"></span>
+                            <h3 class="text-sm font-semibold text-gray-900">
+                                <a href="/categories/<%= category.toLowerCase() %>" class="focus:outline-none">
+                                    <span class="absolute inset-0" aria-hidden="true"></span>
+                                    <%= category %>
+                                </a>
+                            </h3>
+                        </div>
+                    </div>
+                <% }); %>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialize GSAP animations
+    gsap.registerPlugin(ScrollTrigger);
+
+    // Hero section animations
+    const heroTl = gsap.timeline();
+    heroTl.from("h1 span", {
+        y: 50,
+        opacity: 0,
+        duration: 1,
+        stagger: 0.3,
+        ease: "power3.out"
+    })
+    .from("main p", {
+        y: 30,
+        opacity: 0,
+        duration: 0.8,
+        ease: "power3.out"
+    }, "-=0.5")
+    .from(".hero .rounded-md", {
+        y: 30,
+        opacity: 0,
+        duration: 0.8,
+        stagger: 0.2,
+        ease: "power3.out"
+    }, "-=0.5");
+
+    // Featured posts animations
+    gsap.utils.toArray("article").forEach((card, i) => {
+        gsap.from(card, {
+            scrollTrigger: {
+                trigger: card,
+                start: "top bottom-=100px",
+                toggleActions: "play none none reverse"
+            },
+            y: 50,
+            opacity: 0,
+            duration: 0.6,
+            delay: i * 0.1
+        });
+    });
+
+    // Categories animations
+    gsap.utils.toArray(".group.relative").forEach((category, i) => {
+        gsap.from(category, {
+            scrollTrigger: {
+                trigger: category,
+                start: "top bottom-=50px",
+                toggleActions: "play none none reverse"
+            },
+            scale: 0.9,
+            opacity: 0,
+            duration: 0.4,
+            delay: i * 0.05
+        });
+    });
+</script>

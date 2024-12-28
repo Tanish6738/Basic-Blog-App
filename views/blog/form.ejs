@@ -1,0 +1,128 @@
+<%- include('../layouts/main', { title: blog ? 'Edit Blog' : 'Create Blog' }) %>
+
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="bg-white shadow-sm rounded-lg p-6">
+        <div class="pb-5 border-b border-gray-200">
+            <h3 class="text-2xl leading-6 font-medium text-gray-900">
+                <%= blog ? 'Edit Blog Post' : 'Create New Blog Post' %>
+            </h3>
+            <p class="mt-2 max-w-4xl text-sm text-gray-500">
+                <%= blog ? 'Update your blog post with the latest content.' : 'Share your thoughts with the world.' %>
+            </p>
+        </div>
+
+        <form action="<%= blog ? `/blogs/${blog._id}?_method=PUT` : '/blogs' %>" method="POST" enctype="multipart/form-data" class="mt-6 space-y-6">
+            <!-- Title -->
+            <div>
+                <label for="title" class="form-label">Title</label>
+                <input type="text" name="title" id="title" class="form-input" value="<%= blog ? blog.title : '' %>" required>
+            </div>
+
+            <!-- Category -->
+            <div>
+                <label for="category" class="form-label">Category</label>
+                <select name="category" id="category" class="form-input">
+                    <option value="">Select a category</option>
+                    <% ['Technology', 'Travel', 'Food', 'Lifestyle', 'Business', 'Health', 'Education', 'Other'].forEach(category => { %>
+                        <option value="<%= category %>" <%= blog && blog.category === category ? 'selected' : '' %>>
+                            <%= category %>
+                        </option>
+                    <% }); %>
+                </select>
+            </div>
+
+            <!-- Keywords -->
+            <div>
+                <label for="keywords" class="form-label">Keywords</label>
+                <div class="mt-1 flex rounded-md shadow-sm">
+                    <input type="text" name="keywords" id="keywords" class="form-input" value="<%= blog ? blog.keywords.join(', ') : '' %>" placeholder="Separate keywords with commas">
+                </div>
+                <p class="mt-2 text-sm text-gray-500">Add keywords to help others find your blog post.</p>
+            </div>
+
+            <!-- Image Upload -->
+            <div>
+                <label for="image" class="form-label">Cover Image</label>
+                <div class="mt-1 flex items-center space-x-4">
+                    <% if (blog && blog.image) { %>
+                        <div class="flex-shrink-0">
+                            <img src="<%= blog.image %>" alt="Current cover image" class="h-32 w-32 object-cover rounded-lg">
+                        </div>
+                    <% } %>
+                    <div class="flex-grow">
+                        <input type="file" name="image" id="image" accept="image/*" class="form-input">
+                        <p class="mt-2 text-sm text-gray-500">Upload a new image (optional). Recommended size: 1200x630 pixels.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Content -->
+            <div>
+                <label for="content" class="form-label">Content</label>
+                <div class="mt-1">
+                    <textarea id="content" name="content" rows="15" class="form-input" required><%= blog ? blog.content : '' %></textarea>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-5 border-t border-gray-200">
+                <div class="flex justify-end space-x-3">
+                    <a href="<%= blog ? `/blogs/${blog._id}` : '/' %>" class="btn-secondary">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn-primary">
+                        <%= blog ? 'Update Post' : 'Publish Post' %>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Preview image before upload
+    const imageInput = document.getElementById('image');
+    const previewContainer = imageInput.parentElement;
+    
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                // Remove existing preview if any
+                const existingPreview = previewContainer.querySelector('img');
+                if (existingPreview) {
+                    existingPreview.remove();
+                }
+                
+                // Create new preview
+                const preview = document.createElement('img');
+                preview.src = e.target.result;
+                preview.classList.add('h-32', 'w-32', 'object-cover', 'rounded-lg', 'mt-2');
+                imageInput.parentNode.insertBefore(preview, imageInput.nextSibling);
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Simple content validation
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const content = document.getElementById('content').value;
+        const title = document.getElementById('title').value;
+        
+        if (content.length < 100) {
+            e.preventDefault();
+            alert('Content should be at least 100 characters long.');
+            return;
+        }
+        
+        if (title.length < 5) {
+            e.preventDefault();
+            alert('Title should be at least 5 characters long.');
+            return;
+        }
+    });
+});
+</script>
